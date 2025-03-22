@@ -44,7 +44,7 @@ func PIR() {
 	log.Printf("DBSize: %d, ChunkSize: %d, ChunkNum: %d", DBSize, ChunkSize, ChunkNum)
 
 	// The following is the client side algorithm.
-	Q := uint64(math.Sqrt(float64(DBSize)) * math.Log(float64(DBSize)))
+	Q := uint64(math.Sqrt(float64(DBSize)) * math.Log(float64(DBSize))) //e^
 	M1 := 4 * uint64(math.Sqrt(float64(DBSize))*math.Log(float64(DBSize)))
 	M2 := 4 * uint64(math.Log(float64(DBSize)))
 	log.Printf("Q: %d, M1: %d, M2: %d", Q, M1, M2)
@@ -160,6 +160,6 @@ func PIR() {
 }
 
 func main() {
-	DBSize = 10000 // please make sure DBSize is a perfect square
+	DBSize = 1024 // please make sure DBSize is a perfect square
 	PIR()
 }

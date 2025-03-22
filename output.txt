@@ -1,0 +1,14 @@
+Every Local Set Size 32 bytes
+Every Local Backup Set Size 16 bytes
+Local Set Num 2176, Local Backup Set Num 624
+Local Storage Size 0.08544921875 MB
+Per query communication cost 0.1328125 kb
+Finish Setup Phase, store 2176 local sets, 624 backup sets
+Local Storage Size 0.08544921875 MB
+Setup Phase took 8 ms, amortized time 0.03619909502262444 ms per query
+Setup Phase Comm Cost 0.0078125 MB, amortized cost 0.03619909502262444 KB per queryNum of local miss elements 0
+Finish Online Phase with 221 queries
+Online Phase took 199 ms, amortized time 0.9004524886877828 ms
+Per query upload cost 0.125 kb
+Per query download cost 0.0078125 kb
+End to end amortized time 0.9366515837104072 msEnd to end amortized comm cost 0.16901159502262444 kb---------------breakdown-------------------------End to end amortized time 0.9366515837104072 msAverage Online Time 0.9043665791855204 msAverage Network Latency 0.8810200407239819 msAverage Server Time 0.0007410769230769231 msAverage Client Time 0.022605461538461574 msAverage Find Hint Time 0.010584493212669684 ms-------------------------------------------------
