@@ -190,6 +190,9 @@ func PRFEval3(key *PrfKey128, x uint64) uint64 {
 	return PRFEval2(&key2, x)
 }
 
+// 扩展密钥。
+// 对输入数据 x 执行 AES-128 加密。
+// 返回加密后的结果
 func PRFEval4(key *PrfKey128, x uint64) uint64 {
 	var longKey = make([]uint32, 11*4)
 	expandKeyAsm(&key[0], &longKey[0])
