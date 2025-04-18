@@ -214,8 +214,10 @@ func main() {
 		log.Fatalf("Failed to listen %v", err)
 	}
 
-	DB := make([]uint64, ChunkSize*SetSize*util.DBEntryLength)
+	DB := make([]uint64, ChunkSize*SetSize*util.DBEntryLength) //因为uint64 是 8 bytes, 一个EntryLength 就代表有多少个 uint64
 	log.Println("DB Real N:", len(DB))
+
+	//生成DB
 	if !ignoreInit {
 		for i := uint64(0); i < uint64(len(DB))/util.DBEntryLength; i++ {
 			//DB[i] = util.DefaultHash(DBSeed ^ i)

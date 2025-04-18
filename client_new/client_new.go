@@ -121,7 +121,7 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 	masterKey := util.RandKey(rng)
 	// expand the master key to a long key. Save some computation.
 	longKey := util.GetLongKey((*util.PrfKey128)(&masterKey))
-	totalQueryNum := uint64(math.Sqrt(float64(DBSize)) * math.Log(float64(DBSize)))
+	totalQueryNum := uint64(math.Sqrt(float64(DBSize)) * math.Log(float64(DBSize))) // sqrt(N)*log2(N)
 	plannedQueryNum := totalQueryNum
 	log.Printf("totalQueryNum %v", totalQueryNum)
 
@@ -139,7 +139,7 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 	if totalQueryNum > 1000 {
 		totalQueryNum = 1000
 	}
-
+	log.Printf("totalQueryNum %v", totalQueryNum)
 	// Setup Phase:
 	// 		The client sends a simple query to the left server to fetch the whole DB
 	//		When the client gets i-th chunk, it updates all local sets' parities, stores some replacements.
@@ -197,6 +197,7 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 	localStorageSize := float64(localSetNum*uint64(reflect.TypeOf(LocalSet{}).Size()) + (totalBackupSetNum * uint64(reflect.TypeOf(LocalBackupSet{}).Size())))
 	localStorageSize = localStorageSize + float64(totalBackupSetNum)*(8+util.DBEntrySize) // the replacements
 	log.Printf("Local Storage Size %v MB", localStorageSize/1024/1024)
+
 	perQueryCommCost := float64(SetSize) * float64(8)               // upload cost
 	perQueryCommCost = perQueryCommCost + float64(util.DBEntrySize) // download cost
 	log.Printf("Per query communication cost %v kb", perQueryCommCost/1024)
@@ -317,19 +318,19 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 
 	log.Printf("Finish Setup Phase, store %v local sets, %v backup sets/replacement pairs", localSetNum, SetSize*backupSetNumPerGroup)
 	log.Printf("Local Storage Size %v MB", localStorageSize/1024/1024)
-	log.Printf("Setup Phase took %v ms, amortized time %v ms per query", elapsed.Milliseconds(), float64(elapsed.Milliseconds())/float64(plannedQueryNum))
-	log.Printf("Setup Phase Comm Cost %v MB, amortized cost %v KB per query", float64(offlineCommCost)/1024/1024, float64(offlineCommCost)/1024/float64(plannedQueryNum))
+	log.Printf("Setup Phase took %v ms, amortized time %.2v ms per query", elapsed.Milliseconds(), float64(elapsed.Milliseconds())/float64(plannedQueryNum))
+	log.Printf("Setup Phase Comm Cost %v MB, amortized cost %.2v KB per query", float64(offlineCommCost)/1024/1024, float64(offlineCommCost)/1024/float64(plannedQueryNum))
 	log.Printf("Num of local miss elements %v", len(localMissElements))
 	str = fmt.Sprintf("Finish Setup Phase, store %v local sets, %v backup sets\n", localSetNum, SetSize*backupSetNumPerGroup)
 	LogFile.WriteString(str)
 
-	str = fmt.Sprintf("Local Storage Size %v MB\n", localStorageSize/1024/1024)
+	str = fmt.Sprintf("Local Storage Size %.2v MB\n", localStorageSize/1024/1024)
 	LogFile.WriteString(str)
 
-	str = fmt.Sprintf("Setup Phase took %v ms, amortized time %v ms per query\n", elapsed.Milliseconds(), float64(elapsed.Milliseconds())/float64(totalQueryNum))
+	str = fmt.Sprintf("Setup Phase took %v ms, amortized time %.2v ms per query\n", elapsed.Milliseconds(), float64(elapsed.Milliseconds())/float64(totalQueryNum))
 	LogFile.WriteString(str)
 
-	str = fmt.Sprintf("Setup Phase Comm Cost %v MB, amortized cost %v KB per query", float64(offlineCommCost)/1024/1024, float64(offlineCommCost)/1024/float64(plannedQueryNum))
+	str = fmt.Sprintf("Setup Phase Comm Cost %v MB, amortized cost %.2v KB per query", float64(offlineCommCost)/1024/1024, float64(offlineCommCost)/1024/float64(plannedQueryNum))
 	LogFile.WriteString(str)
 
 	str = fmt.Sprintf("Num of local miss elements %v\n", len(localMissElements))
@@ -348,6 +349,7 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 			log.Printf("Making %v-th query", q)
 		}
 		// just do random query for now
+		// 现在是随机选择要查询的 x
 		x := rng.Uint64() % DBSize
 
 		// make sure x is not in the local cache
@@ -453,6 +455,7 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 		var xVal util.DBEntry
 
 		// if still no hit set found, then fail
+		// 没有找到就失败
 		if hitSetId == 999999999 {
 			if v, ok := localMissElements[x]; ok == false {
 				log.Fatalf("No hit set found for %v in %v-th query", x, q)
@@ -656,5 +659,6 @@ func main() {
 
 	defer leftConn.Close()
 
+	//到这里才算正式进入主函数，
 	runPIRWithOneServer(leftClient, DBSize, DBSeed)
 }
