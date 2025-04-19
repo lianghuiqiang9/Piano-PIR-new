@@ -113,6 +113,7 @@ func FailProbBallIntoBins(ballNum uint64, binNum uint64, binSize uint64) float64
 	return t
 }
 
+// 这里的 DBSeed 就是数据库了。
 func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed uint64) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*100000000000))
 	defer cancel()
@@ -149,7 +150,7 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 
 	// Initialize local sets and backup sets
 
-	localSets := make([]LocalSet, localSetNum)
+	localSets := make([]LocalSet, localSetNum) //是一个向量的
 	localBackupSets := make([]LocalBackupSet, totalBackupSetNum)
 	localCache := make(map[uint64]util.DBEntry)
 	localMissElements := make(map[uint64]util.DBEntry)
@@ -198,8 +199,9 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 	localStorageSize = localStorageSize + float64(totalBackupSetNum)*(8+util.DBEntrySize) // the replacements
 	log.Printf("Local Storage Size %v MB", localStorageSize/1024/1024)
 
-	perQueryCommCost := float64(SetSize) * float64(8)               // upload cost
+	perQueryCommCost := float64(SetSize) * float64(8)               // upload cost  //  因为这个 SetSize 是 uint64 所以是 8 bytes
 	perQueryCommCost = perQueryCommCost + float64(util.DBEntrySize) // download cost
+
 	log.Printf("Per query communication cost %v kb", perQueryCommCost/1024)
 
 	str = fmt.Sprintf("Every Local Set Size %v bytes\n", reflect.TypeOf(LocalSet{}).Size())
@@ -212,9 +214,11 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 	LogFile.WriteString(str)
 
 	str = fmt.Sprintf("Local Storage Size %v MB\n", localStorageSize/1024/1024)
+	str = fmt.Sprintf("*******************************Local Storage Size %v MB\n", localStorageSize/1024/1024)
 	LogFile.WriteString(str)
 
 	str = fmt.Sprintf("Per query communication cost %v kb\n", perQueryCommCost/1024)
+	str = fmt.Sprintf("*******************************Per query communication cost %v kb\n", perQueryCommCost/1024)
 	LogFile.WriteString(str)
 
 	/***************This is the offline phase*******************/
@@ -317,7 +321,7 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 	offlineCommCost := float64(DBSize) * float64(reflect.TypeOf(util.DBEntry{}).Size())
 
 	log.Printf("Finish Setup Phase, store %v local sets, %v backup sets/replacement pairs", localSetNum, SetSize*backupSetNumPerGroup)
-	log.Printf("Local Storage Size %v MB", localStorageSize/1024/1024)
+	log.Printf("*******************************Local Storage Size %v MB", localStorageSize/1024/1024)
 	log.Printf("Setup Phase took %v ms, amortized time %.2v ms per query", elapsed.Milliseconds(), float64(elapsed.Milliseconds())/float64(plannedQueryNum))
 	log.Printf("Setup Phase Comm Cost %v MB, amortized cost %.2v KB per query", float64(offlineCommCost)/1024/1024, float64(offlineCommCost)/1024/float64(plannedQueryNum))
 	log.Printf("Num of local miss elements %v", len(localMissElements))
@@ -502,6 +506,15 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 			LocalReplacementGroups[chunkId].consumed++
 		}
 		expandedSet[chunkId] = repIndex
+		//log.Printf("uint64(len(expandedSet)): %v", uint64(len(expandedSet))) // 这里是 512 个索引
+
+		/*
+			for i := uint64(0); i < uint64(len(expandedSet)); i++ {
+				log.Printf("%v, %v", i, expandedSet[i])
+			}
+		*/
+
+		//expandedSet这个要发送给server
 
 		/************ Now send the edited set to the server. ************/
 		networkStart := time.Now()
@@ -519,14 +532,36 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 		/*********** Now the res.Parity contains the parity of the edited set. ***********/
 		/*********** We can recover the answer now. ***********/
 
-		xVal = localSets[hitSetId].parity                              // the parity of the hit set
-		util.DBEntryXorFromRaw(&xVal, res.Parity[:util.DBEntryLength]) // xor the parity of the edited set
-		util.DBEntryXor(&xVal, &repVal)                                // xor the replacement value
+		//进行两个xor party，得到最后的内容。
+		// p_i
+		xVal = localSets[hitSetId].parity // the parity of the hit set
+		/*
+			for i := uint64(0); i < uint64(len(xVal)); i++ {
+				log.Printf("1xVal: %v, %v", i, xVal[i])
+			}*/
+		//这里是server计算回去过了。
+		// server 发送回来的是这个res 也就是q
 
+		util.DBEntryXorFromRaw(&xVal, res.Parity[:util.DBEntryLength]) // xor the parity of the edited set
+
+		/*
+			for i := uint64(0); i < uint64(len(xVal)); i++ {
+				log.Printf("2xVal: %v, %v", i, xVal[i])
+			}*/
+		//现在是client计算得到xVal
+		// DB[r]
+		util.DBEntryXor(&xVal, &repVal) // xor the replacement value
+		/*
+			for i := uint64(0); i < uint64(len(xVal)); i++ {
+				log.Printf("3xVal: %v, %v", i, xVal[i])
+			}*/
 		// update the local cache
 		localCache[x] = xVal
 
 		// verify the correctness of the query
+		// entry 是我们的查询明文数据库的内容，
+		// xVal 是我们的解答的内容。
+
 		entry := util.GenDBEntry(DBSeed, x)
 		// if ignoreOffline == true, the client will not verify the correctness of the query
 		if ignoreOffline == false && util.EntryIsEqual(&xVal, &entry) == false {
@@ -557,7 +592,7 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 	}
 
 	elapsed = time.Since(start)
-	perQueryUploadCost := float64(SetSize) * float64(8)
+	perQueryUploadCost := float64(SetSize) * float64(8) //这里肯定有歧义，因为是 setsize 个 index， 起码这里的setsize的uint64
 	perQueryDownloadCost := float64(uint64(reflect.TypeOf(util.DBEntry{}).Size()))
 
 	avgNetworkLatency := float64(totalNetworkLatency) / float64(totalQueryNum)
@@ -567,19 +602,19 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 	avgFindHintTime := float64(totalFindHintTime) / float64(totalQueryNum)
 
 	log.Printf("Finish Online Phase with %v queries", totalQueryNum)
-	log.Printf("Online Phase took %v ms, amortized time %v ms", elapsed.Milliseconds(), float64(elapsed.Milliseconds())/float64(totalQueryNum))
-	log.Printf("Per query upload cost %v kb", perQueryUploadCost/1024)
-	log.Printf("Per query download cost %v kb", perQueryDownloadCost/1024)
-	log.Printf("End to end amortized time %v ms", float64(offlineElapsed.Milliseconds())/float64(plannedQueryNum)+float64(elapsed.Milliseconds())/float64(totalQueryNum))
-	log.Printf("End to end amortized comm cost %v kb", (float64(offlineCommCost)/1024/float64(plannedQueryNum) + (perQueryUploadCost+perQueryDownloadCost)/1024))
+	log.Printf("Online Phase took %v ms, amortized time %0.2v ms", elapsed.Milliseconds(), float64(elapsed.Milliseconds())/float64(totalQueryNum))
+	log.Printf("*******************************Per query upload cost %0.2v kb --> KB", perQueryUploadCost/1024)
+	log.Printf("*******************************Per query download cost %0.2v kb --> KB", perQueryDownloadCost/1024)
+	log.Printf("End to end amortized time %0.2v ms", float64(offlineElapsed.Milliseconds())/float64(plannedQueryNum)+float64(elapsed.Milliseconds())/float64(totalQueryNum))
+	log.Printf("End to end amortized comm cost %0.2v kb", (float64(offlineCommCost)/1024/float64(plannedQueryNum) + (perQueryUploadCost+perQueryDownloadCost)/1024))
 
 	log.Printf("---------------breakdown-------------------------")
-	log.Printf("End to end amortized time %v ms", float64(offlineElapsed.Milliseconds())/float64(plannedQueryNum)+float64(elapsed.Milliseconds())/float64(totalQueryNum))
-	log.Printf("Average Online Time %v ms", avgAmortizedTime/1000000)
-	log.Printf("Average Network Latency %v ms", avgNetworkLatency/1000000)
-	log.Printf("Average Server Time %v ms", avgServerComputeTime/1000000)
-	log.Printf("Average Client Time %v ms", avgClientComputeTime/1000000)
-	log.Printf("Average Find Hint Time %v ms", avgFindHintTime/1000000)
+	log.Printf("End to end amortized time %0.2v ms", float64(offlineElapsed.Milliseconds())/float64(plannedQueryNum)+float64(elapsed.Milliseconds())/float64(totalQueryNum))
+	log.Printf("Average Online Time %0.2v ms", avgAmortizedTime/1000000)
+	log.Printf("Average Network Latency %0.2v ms", avgNetworkLatency/1000000)
+	log.Printf("*******************************Average Server Time %5.2v ms", avgServerComputeTime/1000000)
+	log.Printf("*******************************Average Client Time %5.2v ms", avgClientComputeTime/1000000)
+	log.Printf("Average Find Hint Time %0.2v ms", avgFindHintTime/1000000)
 	log.Printf("-------------------------------------------------")
 
 	str = fmt.Sprintf("Finish Online Phase with %v queries\n", totalQueryNum)
@@ -588,37 +623,37 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 	str = fmt.Sprintf("Online Phase took %v ms, amortized time %v ms\n", elapsed.Milliseconds(), float64(elapsed.Milliseconds())/float64(totalQueryNum))
 	LogFile.WriteString(str)
 
-	str = fmt.Sprintf("Per query upload cost %v kb\n", float64(perQueryUploadCost)/1024)
+	str = fmt.Sprintf("Per query upload cost %0.2v kb\n", float64(perQueryUploadCost)/1024)
 	LogFile.WriteString(str)
 
-	str = fmt.Sprintf("Per query download cost %v kb\n", float64(perQueryDownloadCost)/1024)
+	str = fmt.Sprintf("Per query download cost %0.2v kb\n", float64(perQueryDownloadCost)/1024)
 	LogFile.WriteString(str)
 
-	str = fmt.Sprintf("End to end amortized time %v ms", float64(offlineElapsed.Milliseconds())/float64(plannedQueryNum)+float64(elapsed.Milliseconds())/float64(totalQueryNum))
+	str = fmt.Sprintf("End to end amortized time %0.2v ms", float64(offlineElapsed.Milliseconds())/float64(plannedQueryNum)+float64(elapsed.Milliseconds())/float64(totalQueryNum))
 	LogFile.WriteString(str)
 
-	str = fmt.Sprintf("End to end amortized comm cost %v kb", (float64(offlineCommCost)/1024/float64(plannedQueryNum) + (perQueryUploadCost+perQueryDownloadCost)/1024))
+	str = fmt.Sprintf("End to end amortized comm cost %0.2v kb", (float64(offlineCommCost)/1024/float64(plannedQueryNum) + (perQueryUploadCost+perQueryDownloadCost)/1024))
 	LogFile.WriteString(str)
 
 	str = fmt.Sprintf("---------------breakdown-------------------------")
 	LogFile.WriteString(str)
 
-	str = fmt.Sprintf("End to end amortized time %v ms", float64(offlineElapsed.Milliseconds())/float64(plannedQueryNum)+float64(elapsed.Milliseconds())/float64(totalQueryNum))
+	str = fmt.Sprintf("End to end amortized time %0.2v ms", float64(offlineElapsed.Milliseconds())/float64(plannedQueryNum)+float64(elapsed.Milliseconds())/float64(totalQueryNum))
 	LogFile.WriteString(str)
 
-	str = fmt.Sprintf("Average Online Time %v ms", avgAmortizedTime/1000000)
+	str = fmt.Sprintf("Average Online Time %0.2v ms", avgAmortizedTime/1000000)
 	LogFile.WriteString(str)
 
-	str = fmt.Sprintf("Average Network Latency %v ms", avgNetworkLatency/1000000)
+	str = fmt.Sprintf("Average Network Latency %0.2v ms", avgNetworkLatency/1000000)
 	LogFile.WriteString(str)
 
-	str = fmt.Sprintf("Average Server Time %v ms", avgServerComputeTime/1000000)
+	str = fmt.Sprintf("Average Server Time %0.2v ms", avgServerComputeTime/1000000)
 	LogFile.WriteString(str)
 
-	str = fmt.Sprintf("Average Client Time %v ms", avgClientComputeTime/1000000)
+	str = fmt.Sprintf("Average Client Time %0.2v ms", avgClientComputeTime/1000000)
 	LogFile.WriteString(str)
 
-	str = fmt.Sprintf("Average Find Hint Time %v ms", avgFindHintTime/1000000)
+	str = fmt.Sprintf("Average Find Hint Time %0.2v ms", avgFindHintTime/1000000)
 	LogFile.WriteString(str)
 
 	str = fmt.Sprintf("-------------------------------------------------")
@@ -645,6 +680,7 @@ func main() {
 	LogFile = f
 
 	log.Printf("DBSize %v, DBSeed %v, ChunkSize %v, SetSize %v", DBSize, DBSeed, ChunkSize, SetSize)
+	log.Printf("*******************************DB N: %v, Entry Size %v Bytes, DB Size %v MB", DBSize, util.DBEntrySize, DBSize*util.DBEntrySize/1024/1024)
 
 	leftConn, err := grpc.Dial(
 		serverAddr,

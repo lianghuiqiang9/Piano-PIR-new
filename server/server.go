@@ -204,7 +204,7 @@ func main() {
 
 	DBSize, DBSeed = ReadConfigInfo()
 	log.Printf("DB N: %v, Entry Size %v Bytes, DB Size %v MB", DBSize, util.DBEntrySize, DBSize*util.DBEntrySize/1024/1024)
-
+	log.Printf("*******************************DB N: %v, Entry Size %v Bytes, DB Size %v MB", DBSize, util.DBEntrySize, DBSize*util.DBEntrySize/1024/1024)
 	ChunkSize, SetSize = util.GenParams(DBSize)
 
 	log.Println("Chunk Size:", ChunkSize, "Set Size:", SetSize)

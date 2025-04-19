@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	DBEntrySize   = 8 // has to be a multiple of 8!!
-	DBEntryLength = DBEntrySize / 8
+	DBEntrySize   = 8               // has to be a multiple of 8!!
+	DBEntryLength = DBEntrySize / 8 // 是 1 也就是 1 个 uint64
 )
 
 type PrfKey256 [32]byte
@@ -86,6 +86,7 @@ func RandDBEntry(rng *rand.Rand) DBEntry {
 	return entry
 }
 
+// 这里的entry是DBEntryLength的
 func GenDBEntry(key uint64, id uint64) DBEntry {
 	var entry DBEntry
 	for i := 0; i < DBEntryLength; i++ {

@@ -506,6 +506,7 @@ func runPIRWithOneServer(leftClient pb.QueryServiceClient, DBSize uint64, DBSeed
 	log.Printf("totalQueryNum %v", totalQueryNum)
 
 	//localSetNum := 4 * uint64(math.Sqrt(float64(DBSize))*math.Log(float64(DBSize)))
+	//这里的local就是Primary Table
 	localSetNum := primaryNumParam(float64(totalQueryNum), float64(ChunkSize), FailureProbLog2+1)
 	// if localSetNum is not a mulitple of 4 then we need to add some padding
 	localSetNum = (localSetNum + threadNum - 1) / threadNum * threadNum
@@ -1044,7 +1045,6 @@ func main() {
 	LogFile = f
 
 	log.Printf("DBSize %v, DBSeed %v, ChunkSize %v, SetSize %v", DBSize, DBSeed, ChunkSize, SetSize)
-
 	leftConn, err := grpc.Dial(
 		serverAddr,
 		grpc.WithInsecure(),
